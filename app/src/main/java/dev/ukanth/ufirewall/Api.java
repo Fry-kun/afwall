@@ -210,6 +210,9 @@ public final class Api {
     private static final String[] staticChains = {"", "-input", "-3g", "-wifi", "-reject", "-vpn", "-3g-tether", "-3g-home", "-3g-roam", "-wifi-tether", "-wifi-wan", "-wifi-lan", "-tor", "-tor-reject", "-tether"};
     private static boolean globalStatus = false;
 
+    private static final String[] TCP_UDP = {"tcp", "udp"};
+    private static final String[] DNS_PORTS = {"53", "853"};
+
     public static List<Integer> getListOfUids() {
         return listOfUids;
     }
@@ -434,14 +437,11 @@ public final class Api {
 				addRuleForUsers(cmds, new String[]{"root"}, "-A " + chain + " -p udp --dport 53",  action);
 			}*/
 
-            if (whitelist) {
-                addRuleForUsers(cmds, new String[]{"root"}, "-A " + chain + " -p udp --dport 53", " -j RETURN");
-                addRuleForUsers(cmds, new String[]{"root"}, "-A " + chain + " -p tcp --dport 53", " -j RETURN");
-            } else {
-                addRuleForUsers(cmds, new String[]{"root"}, "-A " + chain + " -p udp --dport 53", " -j RETURN");
-                addRuleForUsers(cmds, new String[]{"root"}, "-A " + chain + " -p tcp --dport 53", " -j RETURN");
+            for (String protocol: TCP_UDP) {
+                for (String dns_port: DNS_PORTS) {
+                    addRuleForUsers(cmds, new String[]{"root"}, "-A " + chain + " -p " + protocol +" --dport=" + dns_port, " -j RETURN");
+                }
             }
-
 
             // NTP service runs as "system" user
             if (uids.contains(SPECIAL_UID_NTP)) {
@@ -472,12 +472,12 @@ public final class Api {
                 }
             }
 
-            //add 1052 for LAN
-            if(G.enableLAN()) {
-                cmds.add("-A " + "afwall-wifi-lan" + " -m owner --uid-owner 1052 -j RETURN");
-            }
-
-            cmds.add("-A " + "afwall-wifi-wan" + " -m owner --uid-owner 1052 -j RETURN");
+//            //add 1052 for LAN
+//            if(G.enableLAN()) {
+//                cmds.add("-A " + "afwall-wifi-lan" + " -m owner --uid-owner 1052 -j RETURN");
+//            }
+//
+//            cmds.add("-A " + "afwall-wifi-wan" + " -m owner --uid-owner 1052 -j RETURN");
         }
     }
 
@@ -753,23 +753,32 @@ public final class Api {
                 // DHCP replies to client
                 addRuleForUsers(cmds, users_dhcp, "-A " + AFWALL_CHAIN_NAME + "-wifi-tether", "-p udp --sport=67 --dport=68" + action);
                 // DNS replies to client
-                addRuleForUsers(cmds, users_dns, "-A " + AFWALL_CHAIN_NAME + "-wifi-tether", "-p udp --sport=53" + action);
-                addRuleForUsers(cmds, users_dns, "-A " + AFWALL_CHAIN_NAME + "-wifi-tether", "-p tcp --sport=53" + action);
+                for (String protocol: TCP_UDP) {
+                    for (String dns_port: DNS_PORTS) {
+                        addRuleForUsers(cmds, users_dns, "-A " + AFWALL_CHAIN_NAME + "-wifi-tether", "-p " + protocol +" --sport=" + dns_port + action);
+                    }
+                }
 
             }
             if (containsUidOrAny(ruleDataSet.tetherList, SPECIAL_UID_TETHER)) {
                 // DHCP replies to client
                 addRuleForUsers(cmds, users_dhcp, "-A " + AFWALL_CHAIN_NAME + "-tether", "-p udp --sport=67 --dport=68" + action);
                 // DNS replies to client
-                addRuleForUsers(cmds, users_dns, "-A " + AFWALL_CHAIN_NAME + "-tether", "-p udp --sport=53" + action);
-                addRuleForUsers(cmds, users_dns, "-A " + AFWALL_CHAIN_NAME + "-tether", "-p tcp --sport=53" + action);
+                for (String protocol: TCP_UDP) {
+                    for (String dns_port: DNS_PORTS) {
+                        addRuleForUsers(cmds, users_dns, "-A " + AFWALL_CHAIN_NAME + "-tether", "-p " + protocol +" --sport=" + dns_port + action);
+                    }
+                }
             }
 
             // DNS requests to upstream servers
             // TODO: Allow DNS upstream servers from other connection types
             if (containsUidOrAny(ruleDataSet.dataList, SPECIAL_UID_TETHER)) {
-                addRuleForUsers(cmds, users_dns, "-A " + AFWALL_CHAIN_NAME + "-3g-tether", "-p udp --dport=53" + action);
-                addRuleForUsers(cmds, users_dns, "-A " + AFWALL_CHAIN_NAME + "-3g-tether", "-p tcp --dport=53" + action);
+                for (String protocol: TCP_UDP) {
+                    for (String dns_port: DNS_PORTS) {
+                        addRuleForUsers(cmds, users_dns, "-A " + AFWALL_CHAIN_NAME + "-3g-tether", "-p " + protocol +" --dport=" + dns_port + action);
+                    }
+                }
             }
 
             // if tethered, try to match the above rules (if enabled).  no match -> fall through to the
@@ -780,22 +789,21 @@ public final class Api {
             // NOTE: we still need to open a hole to let WAN-only UIDs talk to a DNS server
             // on the LAN
             if (whitelist) {
-                cmds.add("-A " + AFWALL_CHAIN_NAME + "-wifi-lan -p udp --dport 53 -j RETURN");
-                cmds.add("-A " + AFWALL_CHAIN_NAME + "-wifi-lan -p tcp --dport 53 -j RETURN");
+                for (String protocol: TCP_UDP) {
+                    for (String dns_port: DNS_PORTS) {
+                        cmds.add("-A " + AFWALL_CHAIN_NAME + "-wifi-lan -p " + protocol +" --dport=" + dns_port + " -j RETURN");
+                    }
+                }
 
                 //bug fix allow dns to be open on Pie for all connection type
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    cmds.add("-A " + AFWALL_CHAIN_NAME + "-wifi-wan" + " -p udp --dport 53" + " -j RETURN");
-                    cmds.add("-A " + AFWALL_CHAIN_NAME + "-3g-home" + " -p udp --dport 53" + " -j RETURN");
-                    cmds.add("-A " + AFWALL_CHAIN_NAME + "-3g-roam" + " -p udp --dport 53" + " -j RETURN");
-                    cmds.add("-A " + AFWALL_CHAIN_NAME + "-vpn" + " -p udp --dport 53" + " -j RETURN");
-                    cmds.add("-A " + AFWALL_CHAIN_NAME + "-tether" + " -p udp --dport 53" + " -j RETURN");
-
-                    cmds.add("-A " + AFWALL_CHAIN_NAME + "-wifi-wan" + " -p tcp --dport 53" + " -j RETURN");
-                    cmds.add("-A " + AFWALL_CHAIN_NAME + "-3g-home" + " -p tcp --dport 53" + " -j RETURN");
-                    cmds.add("-A " + AFWALL_CHAIN_NAME + "-3g-roam" + " -p tcp --dport 53" + " -j RETURN");
-                    cmds.add("-A " + AFWALL_CHAIN_NAME + "-vpn" + " -p tcp --dport 53" + " -j RETURN");
-                    cmds.add("-A " + AFWALL_CHAIN_NAME + "-tether" + " -p tcp --dport 53" + " -j RETURN");
+                    for (String chain_suffix: List.of("-wifi-wan", "-3g-home", "-3g-roam", "-vpn", "-tether")) {
+                        for (String protocol : TCP_UDP) {
+                            for (String dns_port : DNS_PORTS) {
+                                cmds.add("-A " + AFWALL_CHAIN_NAME + chain_suffix + " -p " + protocol + " --dport=" + dns_port + " -j RETURN");
+                            }
+                        }
+                    }
                 }
             }
             // now add the per-uid rules for 3G home, 3G roam, wifi WAN, wifi LAN, VPN

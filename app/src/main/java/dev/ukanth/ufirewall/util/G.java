@@ -47,9 +47,11 @@ import com.raizlabs.android.dbflow.config.FlowManager;
 import com.raizlabs.android.dbflow.sql.language.SQLite;
 
 import java.io.File;
+import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -160,6 +162,10 @@ public class G extends Application implements Application.ActivityLifecycleCallb
     private static final String FASTER_RULES = "fasterApplyRules";
 
     private static boolean privateDns = false;
+
+    // Key: network id. Value: DNS servers for that network
+    private static Map<String, List<InetAddress>> dnsServers = Map.of();
+
     //private static final String QUICK_RULES = "quickApply";
     /**
      * FIXME
@@ -787,9 +793,9 @@ public class G extends Application implements Application.ActivityLifecycleCallb
             } catch (PackageManager.NameNotFoundException | NullPointerException e) {
                 gPrefs.edit().putBoolean(REG_DO, false).commit();
             }
-            /*if(BuildConfig.DONATE){
+            if(BuildConfig.DONATE){
                 gPrefs.edit().putBoolean(REG_DO, true).commit();
-            }*/
+            }
         }
         return gPrefs.getBoolean(REG_DO, false);
     }
@@ -1175,6 +1181,12 @@ public class G extends Application implements Application.ActivityLifecycleCallb
                     public void onLinkPropertiesChanged(Network network, LinkProperties linkProperties) {
                         super.onLinkPropertiesChanged(network, linkProperties);
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                            Log.w(Api.TAG, "Private DNS active?: " + linkProperties.isPrivateDnsActive());
+                            Log.w(Api.TAG, "Private DNS server: " + linkProperties.getPrivateDnsServerName());
+                            Log.w(Api.TAG, "linkProperties: " + linkProperties.toString());
+
+//                            dnsServers.put(linkProperties.getInterfaceName(), linkProperties.getDnsServers());
+
                             if(linkProperties.isPrivateDnsActive() != privateDns) {
                                 Log.i(Api.TAG, "Private DNS status changed: " + privateDns);
                                 privateDns = linkProperties.isPrivateDnsActive();
